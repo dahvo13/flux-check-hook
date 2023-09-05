@@ -1,3 +1,4 @@
+import os
 import glob
 import os.path as path
 import subprocess
@@ -66,19 +67,48 @@ def _validateFile(fileToValidate, repos):
                     if "spec" in definition and "values" in definition["spec"]:
                         yaml.dump(definition["spec"]["values"], valuesFile)
 
-                res = subprocess.run(
-                    f"helm pull --repo {quote(chartUrl)} --version {quote(chartVersion)} {quote(chartName)}",
-                    shell=True,
-                    cwd=tmpDir,
-                    text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.STDOUT,
-                )
-                if res.returncode != 0:
-                    _collectErrors(
-                        {"source": "helm pull", "message": f"\n{res.stdout}"}
+                if "oci" in chartUrl and "azurecr" in chartUrl:
+                    res = subprocess.run(
+                        f"helm registry login {os.environ.get('ACR_NAME')}.azurecr.io --username {os.environ.get('USER_NAME')} --password {quote(os.environ.get('PASSWORD'))}",
+                        shell=True,
+                        cwd=tmpDir,
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
                     )
-                    continue
+                    if res.returncode != 0:
+                        _collectErrors(
+                            {"source": "helm registry login", "message": f"\n{res.stdout}"}
+                        )
+                        continue
+
+                    res = subprocess.run(
+                        f"helm pull {quote(chartUrl)}{quote(chartName)} --version {quote(chartVersion)}",
+                        shell=True,
+                        cwd=tmpDir,
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                    )
+                    if res.returncode != 0:
+                        _collectErrors(
+                            {"source": "helm pull", "message": f"\n{res.stdout}"}
+                        )
+                        continue
+                else:
+                    res = subprocess.run(
+                        f"helm pull --repo {quote(chartUrl)} --version {quote(chartVersion)} {quote(chartName)}",
+                        shell=True,
+                        cwd=tmpDir,
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                    )
+                    if res.returncode != 0:
+                        _collectErrors(
+                            {"source": "helm pull", "message": f"\n{res.stdout}"}
+                        )
+                        continue
 
                 res = subprocess.run(
                     "helm lint -f values.yaml *.tgz",
